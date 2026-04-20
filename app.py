@@ -3374,6 +3374,12 @@ def render_aggrid_results_table(
         key=effective_key,
         reload_data=False,
     )
+    # Some cloud/browser setups intermittently fail to paint st_aggrid while data is present.
+    # Keep a native Streamlit table fallback visible in demo/cloud so rows are always accessible.
+    _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE") or bool(os.getenv("STREAMLIT_SHARING_MODE"))
+    if _show_compat_table:
+        with st.expander("Compatibility table (use this if the interactive grid appears blank)", expanded=bool(DEMO_MODE)):
+            st.dataframe(display_df, use_container_width=True, hide_index=True, height=max(260, int(height)))
     if caption:
         st.caption(caption)
 
