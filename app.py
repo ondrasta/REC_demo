@@ -3363,8 +3363,8 @@ def render_aggrid_results_table(
     if use_selection:
         grid_updates |= GridUpdateMode.SELECTION_CHANGED
 
-    # In demo/cloud, use a native clickable table because st_aggrid can render blank in some hosted browsers.
-    _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE")
+    # Optional fallback only when explicitly enabled. Default UX stays AgGrid row-click selection.
+    _show_compat_table = _env_truthy("REC_SHOW_COMPAT_TABLE")
     if _show_compat_table:
         out_df = display_df.copy()
         if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
