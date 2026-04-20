@@ -3363,9 +3363,8 @@ def render_aggrid_results_table(
     if use_selection:
         grid_updates |= GridUpdateMode.SELECTION_CHANGED
 
-    # Optional emergency fallback for environments where st_aggrid fails to paint.
-    # Keep OFF by default so UX remains: click any grid row to drive charts/KPIs.
-    _show_compat_table = _env_truthy("REC_SHOW_COMPAT_TABLE")
+    # In demo/cloud, use a native clickable table because st_aggrid can render blank in some hosted browsers.
+    _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE")
     if _show_compat_table:
         out_df = display_df.copy()
         if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
