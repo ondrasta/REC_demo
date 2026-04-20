@@ -3367,6 +3367,33 @@ def render_aggrid_results_table(
     # In demo/cloud compatibility mode, show a native Streamlit table directly (no blank AgGrid area).
     _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE") or bool(os.getenv("STREAMLIT_SHARING_MODE"))
     if _show_compat_table:
+        if use_selection and selection_session_key and len(display_df) > 0 and selection_row_key_field in display_df.columns:
+            _keys = display_df[selection_row_key_field].astype(str).tolist()
+            _cur = st.session_state.get(selection_session_key)
+            _idx = _keys.index(str(_cur)) if _cur is not None and str(_cur) in _keys else 0
+
+            def _compat_label(k: str) -> str:
+                _hit = display_df[display_df[selection_row_key_field].astype(str) == str(k)]
+                if len(_hit) == 0:
+                    return str(k)
+                _r = _hit.iloc[0]
+                _parts: list[str] = []
+                for _col in ("Tariff", "Scenario family", "PV (kWp)", "Battery (kWh)"):
+                    if _col in _r.index:
+                        _v = _r[_col]
+                        if _v is not None and not pd.isna(_v):
+                            _parts.append(f"{_col}: {_v}")
+                return " | ".join(_parts) if _parts else str(k)
+
+            _picked = st.selectbox(
+                "Select row for KPIs/charts below",
+                options=_keys,
+                index=_idx,
+                format_func=_compat_label,
+                key=f"{effective_key}__compat_pick",
+            )
+            st.session_state[selection_session_key] = str(_picked)
+
         st.dataframe(display_df, use_container_width=True, hide_index=True, height=max(260, int(height)))
         if caption:
             st.caption(caption)
@@ -9563,7 +9590,7 @@ if _has_results:
     # a banner here is redundant and reads like an error. Only warn when the setup panel is collapsed (results-only
     # view) but something still drifted vs the frozen last run (unexpected).
     _editing_assumptions = bool(st.session_state.get("show_setup_after_run", False))
-    if assumptions_changed and not _editing_assumptions:
+    if assumptions_changed and not _editing_assumptions and not DEMO_MODE:
         _stale_tail = (
             "Open the **Run your own analysis** tab → **Edit assumptions and rerun**, then **Run analysis** to refresh."
             if not DEMO_MODE
