@@ -3363,9 +3363,9 @@ def render_aggrid_results_table(
     if use_selection:
         grid_updates |= GridUpdateMode.SELECTION_CHANGED
 
-    # Some cloud/browser setups intermittently fail to paint st_aggrid while data is present.
-    # In demo/cloud compatibility mode, show a native Streamlit table directly (no blank AgGrid area).
-    _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE") or bool(os.getenv("STREAMLIT_SHARING_MODE"))
+    # Optional emergency fallback for environments where st_aggrid fails to paint.
+    # Keep OFF by default so UX remains: click any grid row to drive charts/KPIs.
+    _show_compat_table = _env_truthy("REC_SHOW_COMPAT_TABLE")
     if _show_compat_table:
         out_df = display_df.copy()
         if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
