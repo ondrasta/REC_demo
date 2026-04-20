@@ -1043,7 +1043,7 @@ def _env_truthy(name: str) -> bool:
 
 
 # Packaged demo: hide **Run your own analysis**, enable embedded ZIPs + sidebar picker. Set ``REC_FEASIBILITY_DEMO=1``.
-DEMO_MODE = _env_truthy("REC_FEASIBILITY_DEMO")
+DEMO_MODE = True
 
 
 def embedded_saved_runs_active() -> bool:
