@@ -3369,40 +3369,30 @@ def render_aggrid_results_table(
     if _show_compat_table:
         out_df = display_df.copy()
         if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
-            _pick_col = "__Pick__"
-            _cur = st.session_state.get(selection_session_key)
-            _keys = display_df[selection_row_key_field].astype(str).tolist()
-            out_df.insert(
-                0,
-                _pick_col,
-                [str(_k) == str(_cur) for _k in _keys],
-            )
-            _disabled_cols = [c for c in out_df.columns if c != _pick_col]
-            edited = st.data_editor(
+            _event = st.dataframe(
                 out_df,
                 use_container_width=True,
                 hide_index=True,
                 height=max(260, int(height)),
-                disabled=_disabled_cols,
-                column_config={
-                    _pick_col: st.column_config.CheckboxColumn(
-                        "Pick",
-                        help="Select one row to drive KPIs/charts below.",
-                        default=False,
-                    )
-                },
-                key=f"{effective_key}__compat_pick_table",
+                on_select="rerun",
+                selection_mode="single-row",
+                key=f"{effective_key}__compat_click_table",
             )
-            if isinstance(edited, pd.DataFrame) and len(edited) > 0:
-                _picked_rows = edited[edited[_pick_col] == True]  # noqa: E712
-                if len(_picked_rows) > 0:
-                    st.session_state[selection_session_key] = str(_picked_rows.iloc[0][selection_row_key_field])
-                elif len(_keys) > 0:
-                    st.session_state[selection_session_key] = _keys[0]
-                out_df = edited.drop(columns=[_pick_col], errors="ignore")
+            _keys = out_df[selection_row_key_field].astype(str).tolist()
+            _picked_idx: int | None = None
+            try:
+                _sel_rows = (((_event or {}).get("selection") or {}).get("rows"))  # type: ignore[union-attr]
+                if isinstance(_sel_rows, list) and len(_sel_rows) > 0:
+                    _idx0 = _sel_rows[0]
+                    if isinstance(_idx0, int):
+                        _picked_idx = _idx0
+            except Exception:
+                _picked_idx = None
+            if _picked_idx is not None and 0 <= _picked_idx < len(out_df):
+                st.session_state[selection_session_key] = str(out_df.iloc[_picked_idx][selection_row_key_field])
             else:
-                st.session_state[selection_session_key] = _keys[0] if len(_keys) > 0 else None
-                out_df = display_df.copy()
+                _cur = st.session_state.get(selection_session_key)
+                st.session_state[selection_session_key] = str(_cur) if _cur is not None and str(_cur) in _keys else (_keys[0] if _keys else None)
         else:
             st.dataframe(out_df, use_container_width=True, hide_index=True, height=max(260, int(height)))
         if caption:
