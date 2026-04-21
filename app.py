@@ -3391,7 +3391,19 @@ def render_aggrid_results_table(
             if isinstance(edited, pd.DataFrame) and len(edited) > 0:
                 _picked_rows = edited[edited[_pick_col] == True]  # noqa: E712
                 if len(_picked_rows) > 0:
-                    st.session_state[selection_session_key] = str(_picked_rows.iloc[0][selection_row_key_field])
+                    _checked_keys = [str(x) for x in _picked_rows[selection_row_key_field].tolist()]
+                    _chosen_key = _checked_keys[0]
+                    # Enforce single-select behavior: if multiple are checked, keep the newly checked one.
+                    # Typical pattern: previous row remains checked and user checks one new row.
+                    if len(_checked_keys) > 1:
+                        _cur_str = str(_cur) if _cur is not None else None
+                        if _cur_str is not None and _cur_str in _checked_keys:
+                            _others = [k for k in _checked_keys if k != _cur_str]
+                            if _others:
+                                _chosen_key = _others[0]
+                        else:
+                            _chosen_key = _checked_keys[-1]
+                    st.session_state[selection_session_key] = _chosen_key
                 elif len(_keys) > 0:
                     st.session_state[selection_session_key] = _keys[0]
                 out_df = edited.drop(columns=[_pick_col], errors="ignore")
