@@ -27,9 +27,8 @@ from saved_run_bundle import (
     load_bundle_from_zip,
     read_manifest_from_zip,
 )
-import streamlit.components.v1 as components
 import plotly.graph_objects as go
-from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, GridUpdateMode
+from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder
 
 from bundled_research import (
     RESEARCH_WINNER_RULES,
@@ -195,6 +194,19 @@ def _subset_dataframe_display_columns(df: pd.DataFrame, allowlist: list[str]) ->
     if not cols:
         return df
     return df.loc[:, cols].copy()
+
+
+def _assumption_value_column_to_string(df: pd.DataFrame) -> pd.DataFrame:
+    """Arrow-serialize Setting/Value tables: mixed numeric + text in ``Value`` must not infer float dtype."""
+    if df is None or len(df) == 0 or "Value" not in df.columns:
+        return df
+    out = df.copy()
+    out["Value"] = out["Value"].map(
+        lambda v: ""
+        if v is None or (isinstance(v, float) and pd.isna(v))
+        else str(v)
+    )
+    return out
 
 
 def render_sidebar_performance_panel() -> None:
@@ -612,7 +624,7 @@ def last_run_assumptions_snapshot_df() -> Optional[pd.DataFrame]:
         tariff_matrix_source_last_run=str(st.session_state.last_tariff_matrix_source_label or "").strip(),
     )
     rows = visible_assumption_overview_rows(rows, opt_pv_step=int(loc["pv_step"]))
-    return pd.DataFrame(rows)
+    return _assumption_value_column_to_string(pd.DataFrame(rows))
 
 
 def encode_csv_assumptions_block_then_results_df(
@@ -746,7 +758,7 @@ def recommended_setups_constraint_assumptions_df(
             {"Setting": f"{prefix}: min CO₂ reduction vs grid-only (%)", "Value": float(min_co2_reduction_pct)}
         )
     rows.append({"Setting": f"{prefix}: recommendation preset (ranking among feasible rows)", "Value": winner_line})
-    return pd.DataFrame(rows)
+    return _assumption_value_column_to_string(pd.DataFrame(rows))
 
 
 def tariffs_in_use_info_text(tariff_profiles: List[Dict]) -> str:
@@ -2929,11 +2941,12 @@ def build_full_scenario_results_df(
         df["Self-consumption ratio (%)"] = df["self_consumption_ratio_pct"]
         _pvgen_num = pd.to_numeric(df["pv_gen_kwh"], errors="coerce")
         _export_num = pd.to_numeric(df["export_kwh"], errors="coerce").fillna(0.0)
-        df["Export ratio (% of PV gen)"] = np.where(
-            _pvgen_num.to_numpy(dtype=float) > 1e-9,
-            100.0 * np.maximum(0.0, _export_num.to_numpy(dtype=float)) / _pvgen_num.to_numpy(dtype=float),
-            np.nan,
-        )
+        _pv = _pvgen_num.to_numpy(dtype=float)
+        _ex = _export_num.to_numpy(dtype=float)
+        _export_ratio = np.full(len(_pv), np.nan, dtype=float)
+        _ok = _pv > 1e-9
+        _export_ratio[_ok] = 100.0 * np.maximum(0.0, _ex[_ok]) / _pv[_ok]
+        df["Export ratio (% of PV gen)"] = _export_ratio
         baseline_co2_kg = float(cons.sum() * _grid_co2_factor())
         df["CO2 savings (kg)"] = np.maximum(
             0.0,
@@ -3342,6 +3355,7 @@ def render_aggrid_results_table(
         gb.configure_selection(selection_mode="disabled", suppressRowClickSelection=True)
     gb.configure_grid_options(rowHeight=28, headerHeight=34, suppressCellFocus=True)
     go = gb.build()
+    go.setdefault("autoSizeStrategy", {"type": "fitGridWidth"})
     if not enable_column_filters:
         # ``from_dataframe`` attaches filter column types (e.g. ``numberColumnFilter``); clear those explicitly.
         _aggrid_col_types_with_filter_ui = frozenset(
@@ -3359,11 +3373,11 @@ def render_aggrid_results_table(
                 col_def["hide"] = True
                 break
 
-    grid_updates = GridUpdateMode.SORTING_CHANGED
+    update_on_events: list[str] = ["sortChanged"]
     if enable_column_filters:
-        grid_updates |= GridUpdateMode.FILTERING_CHANGED
+        update_on_events.append("filterChanged")
     if use_selection:
-        grid_updates |= GridUpdateMode.SELECTION_CHANGED
+        update_on_events.append("selectionChanged")
 
     # Optional emergency fallback only (never tied to DEMO_MODE — that hid AgGrid and replaced row-click UX).
     _show_compat_table = _env_truthy("REC_SHOW_COMPAT_TABLE")
@@ -3388,13 +3402,10 @@ def render_aggrid_results_table(
     response = AgGrid(
         display_df,
         gridOptions=go,
-        update_mode=grid_updates,
+        update_on=update_on_events,
         data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-        fit_columns_on_grid_load=True,
         height=height,
-        width="100%",
         key=effective_key,
-        reload_data=False,
     )
     if caption:
         st.caption(caption)
@@ -3959,18 +3970,15 @@ def _maybe_scroll_to_results_top() -> None:
     try:
         # Scroll to an explicit anchor rendered at the top of the Results tab.
         # Use a small timeout so the DOM for the tab is mounted before scrolling.
-        components.html(
-            """
-            <script>
-              setTimeout(() => {
-                const el = document.getElementById('results-top-anchor');
-                if (el) { el.scrollIntoView({behavior: 'auto', block: 'start'}); }
-                else { window.scrollTo(0,0); }
-              }, 80);
-            </script>
-            """,
-            height=1,
-        )
+        _scroll_html = """<!DOCTYPE html><html><head><meta charset="utf-8"/></head><body>
+<script>
+  setTimeout(() => {
+    const el = document.getElementById('results-top-anchor');
+    if (el) { el.scrollIntoView({behavior: 'auto', block: 'start'}); }
+    else { window.scrollTo(0,0); }
+  }, 80);
+</script></body></html>"""
+        st.iframe(_scroll_html, height=1)
     except Exception:
         pass
     st.session_state["_scroll_results_top"] = False
@@ -8077,7 +8085,7 @@ def render_sidebar_postrun_filters() -> None:
         if st.button(
             "Reset filters",
             key="sidebar_btn_reset_all_filters",
-            use_container_width=True,
+            width="stretch",
             help="Restore ranking defaults (goal, scenario type, tariff family, threshold) and reset **Decision constraints** to the Recommended-setups defaults.",
         ):
             _sidebar_reset_all_result_filters()
@@ -8086,7 +8094,7 @@ def render_sidebar_postrun_filters() -> None:
         if st.button(
             "Clear constraints",
             key="sidebar_btn_clear_constraints",
-            use_container_width=True,
+            width="stretch",
             help="Turn off all decision constraint checkboxes (keeps ranking, tariff family, scenario type).",
         ):
             _sidebar_clear_decision_constraints()
