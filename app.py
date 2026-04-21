@@ -3363,68 +3363,24 @@ def render_aggrid_results_table(
     if use_selection:
         grid_updates |= GridUpdateMode.SELECTION_CHANGED
 
-    # In demo/cloud, force compatibility table so rows stay visible even when AgGrid fails to render.
-    _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE") or bool(os.getenv("STREAMLIT_SHARING_MODE"))
+    # Optional emergency fallback only (never tied to DEMO_MODE — that hid AgGrid and replaced row-click UX).
+    _show_compat_table = _env_truthy("REC_SHOW_COMPAT_TABLE")
     if _show_compat_table:
-        # st.data_editor checkbox columns are not true mutual exclusion — multiple can look selected.
-        # Use a single-select widget + read-only table so exactly one row drives KPIs/charts.
-        if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
-            _keys = display_df[selection_row_key_field].astype(str).tolist()
-
-            def _compat_row_label(k: str) -> str:
-                _hit = display_df[display_df[selection_row_key_field].astype(str) == str(k)]
-                if len(_hit) == 0:
-                    return str(k)
-                _r = _hit.iloc[0]
-                _parts: list[str] = []
-                for _col in ("Tariff", "Scenario family", "PV (kWp)", "Battery (kWh)"):
-                    if _col in _r.index:
-                        _v = _r[_col]
-                        if _v is not None and not pd.isna(_v):
-                            _parts.append(f"{_col}: {_v}")
-                return " | ".join(_parts) if _parts else str(k)
-
-            _cur = st.session_state.get(selection_session_key)
-            if _cur is None or str(_cur) not in _keys:
-                st.session_state[selection_session_key] = _keys[0] if _keys else None
-                _cur = st.session_state.get(selection_session_key)
-            _idx = _keys.index(str(_cur)) if _cur is not None and str(_cur) in _keys else 0
-
-            st.caption("**One row selected below** — KPIs and charts use this row only.")
-            if len(_keys) <= 40:
-                _chosen = st.radio(
-                    "Scenario row",
-                    options=_keys,
-                    index=_idx,
-                    format_func=_compat_row_label,
-                    key=f"{effective_key}__compat_radio",
-                    label_visibility="collapsed",
-                )
-            else:
-                _chosen = st.selectbox(
-                    "Scenario row",
-                    options=_keys,
-                    index=_idx,
-                    format_func=_compat_row_label,
-                    key=f"{effective_key}__compat_select",
-                )
-            st.session_state[selection_session_key] = str(_chosen)
-
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                hide_index=True,
-                height=max(260, int(height)),
-            )
-        else:
-            st.dataframe(
-                display_df,
-                use_container_width=True,
-                hide_index=True,
-                height=max(260, int(height)),
-            )
+        st.dataframe(
+            display_df,
+            use_container_width=True,
+            hide_index=True,
+            height=max(260, int(height)),
+        )
         if caption:
             st.caption(caption)
+        if use_selection and selection_session_key:
+            if len(display_df) > 0 and selection_row_key_field in display_df.columns:
+                _keys = display_df[selection_row_key_field].astype(str).tolist()
+                _cur = st.session_state.get(selection_session_key)
+                st.session_state[selection_session_key] = str(_cur) if _cur is not None and str(_cur) in _keys else _keys[0]
+            else:
+                st.session_state[selection_session_key] = None
         return display_df.copy()
 
     response = AgGrid(
