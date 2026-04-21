@@ -3366,62 +3366,66 @@ def render_aggrid_results_table(
     # In demo/cloud, force compatibility table so rows stay visible even when AgGrid fails to render.
     _show_compat_table = bool(DEMO_MODE) or _env_truthy("REC_SHOW_COMPAT_TABLE") or bool(os.getenv("STREAMLIT_SHARING_MODE"))
     if _show_compat_table:
-        out_df = display_df.copy()
+        # st.data_editor checkbox columns are not true mutual exclusion — multiple can look selected.
+        # Use a single-select widget + read-only table so exactly one row drives KPIs/charts.
         if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
-            _pick_col = "__Pick__"
+            _keys = display_df[selection_row_key_field].astype(str).tolist()
+
+            def _compat_row_label(k: str) -> str:
+                _hit = display_df[display_df[selection_row_key_field].astype(str) == str(k)]
+                if len(_hit) == 0:
+                    return str(k)
+                _r = _hit.iloc[0]
+                _parts: list[str] = []
+                for _col in ("Tariff", "Scenario family", "PV (kWp)", "Battery (kWh)"):
+                    if _col in _r.index:
+                        _v = _r[_col]
+                        if _v is not None and not pd.isna(_v):
+                            _parts.append(f"{_col}: {_v}")
+                return " | ".join(_parts) if _parts else str(k)
+
             _cur = st.session_state.get(selection_session_key)
-            _keys = out_df[selection_row_key_field].astype(str).tolist()
-            out_df.insert(0, _pick_col, [str(_k) == str(_cur) for _k in _keys])
-            _disabled_cols = [c for c in out_df.columns if c != _pick_col]
-            edited = st.data_editor(
-                out_df,
+            if _cur is None or str(_cur) not in _keys:
+                st.session_state[selection_session_key] = _keys[0] if _keys else None
+                _cur = st.session_state.get(selection_session_key)
+            _idx = _keys.index(str(_cur)) if _cur is not None and str(_cur) in _keys else 0
+
+            st.caption("**One row selected below** — KPIs and charts use this row only.")
+            if len(_keys) <= 40:
+                _chosen = st.radio(
+                    "Scenario row",
+                    options=_keys,
+                    index=_idx,
+                    format_func=_compat_row_label,
+                    key=f"{effective_key}__compat_radio",
+                    label_visibility="collapsed",
+                )
+            else:
+                _chosen = st.selectbox(
+                    "Scenario row",
+                    options=_keys,
+                    index=_idx,
+                    format_func=_compat_row_label,
+                    key=f"{effective_key}__compat_select",
+                )
+            st.session_state[selection_session_key] = str(_chosen)
+
+            st.dataframe(
+                display_df,
                 use_container_width=True,
                 hide_index=True,
                 height=max(260, int(height)),
-                disabled=_disabled_cols,
-                column_config={
-                    _pick_col: st.column_config.CheckboxColumn(
-                        "Pick",
-                        help="Select one row to drive KPIs/charts below.",
-                        default=False,
-                    )
-                },
-                key=f"{effective_key}__compat_pick_table",
             )
-            if isinstance(edited, pd.DataFrame) and len(edited) > 0:
-                _picked_rows = edited[edited[_pick_col] == True]  # noqa: E712
-                if len(_picked_rows) > 0:
-                    _checked_keys = [str(x) for x in _picked_rows[selection_row_key_field].tolist()]
-                    _chosen_key = _checked_keys[0]
-                    # Enforce single-select behavior: if multiple are checked, keep the newly checked one.
-                    # Typical pattern: previous row remains checked and user checks one new row.
-                    if len(_checked_keys) > 1:
-                        _cur_str = str(_cur) if _cur is not None else None
-                        if _cur_str is not None and _cur_str in _checked_keys:
-                            _others = [k for k in _checked_keys if k != _cur_str]
-                            if _others:
-                                _chosen_key = _others[0]
-                        else:
-                            _chosen_key = _checked_keys[-1]
-                    st.session_state[selection_session_key] = _chosen_key
-                elif len(_keys) > 0:
-                    st.session_state[selection_session_key] = _keys[0]
-                out_df = edited.drop(columns=[_pick_col], errors="ignore")
-            else:
-                st.session_state[selection_session_key] = _keys[0] if len(_keys) > 0 else None
-                out_df = display_df.copy()
         else:
-            st.dataframe(out_df, use_container_width=True, hide_index=True, height=max(260, int(height)))
+            st.dataframe(
+                display_df,
+                use_container_width=True,
+                hide_index=True,
+                height=max(260, int(height)),
+            )
         if caption:
             st.caption(caption)
-        if use_selection and selection_session_key:
-            if len(out_df) > 0 and selection_row_key_field in out_df.columns:
-                _keys = out_df[selection_row_key_field].astype(str).tolist()
-                _cur = st.session_state.get(selection_session_key)
-                st.session_state[selection_session_key] = str(_cur) if _cur is not None and str(_cur) in _keys else _keys[0]
-            else:
-                st.session_state[selection_session_key] = None
-        return out_df.copy()
+        return display_df.copy()
 
     response = AgGrid(
         display_df,
