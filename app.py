@@ -218,7 +218,7 @@ def render_sidebar_performance_panel() -> None:
         for tcol, sec in slow:
             rows.append({"Section": f"  · optimize ({tcol})", "Seconds": float(sec)})
     if rows:
-        st.sidebar.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+        st.sidebar.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
     else:
         st.sidebar.caption("No timings yet — run **Run analysis** or open results after setting the env var.")
     log = st.session_state.get("_perf_log")
@@ -335,7 +335,9 @@ def render_plotly_figure(
 ) -> None:
     if apply_bar_value_labels:
         _apply_bar_chart_value_labels(fig)
-    kw: dict[str, object] = {"use_container_width": use_container_width, "config": PLOTLY_CONFIG}
+    kw: dict[str, object] = {"config": PLOTLY_CONFIG}
+    if use_container_width:
+        kw["width"] = "stretch"
     if key is not None:
         kw["key"] = key
     st.plotly_chart(fig, **kw)
@@ -795,7 +797,7 @@ def render_last_run_tariffs_and_assumptions_section() -> None:
         )
         st.dataframe(
             rows_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=360,
         )
@@ -3368,7 +3370,7 @@ def render_aggrid_results_table(
     if _show_compat_table:
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=max(260, int(height)),
         )
@@ -3625,7 +3627,7 @@ Changing any of these means you should **Run analysis** again so results match y
     st.markdown("### Full KPI reference table")
     st.dataframe(
         build_kpi_guide_table(int(st.session_state.get("last_lifetime_years", DEFAULT_LIFETIME_YEARS))),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -3792,7 +3794,7 @@ def render_settings_kpi_guide_tab(setup: SetupFormValues) -> None:
     st.markdown("### KPI formulas")
     st.dataframe(
         build_kpi_guide_table(int(st.session_state.get("last_lifetime_years", DEFAULT_LIFETIME_YEARS))),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
     )
 
@@ -3821,11 +3823,11 @@ def render_bundled_research_tab() -> None:
         build_research_display_dataframe(raw, scenario_titles, tariff_names)
     )
     st.markdown("##### Overview table")
-    st.dataframe(disp, use_container_width=True)
+    st.dataframe(disp, width="stretch")
 
     winners_all = build_all_winners_summary_df(raw, scenario_titles, tariff_names, mat)
     st.markdown("##### Winners by scenario (all rules)")
-    st.dataframe(winners_all, use_container_width=True, hide_index=True)
+    st.dataframe(winners_all, width="stretch", hide_index=True)
 
     st.markdown("##### Comparison bar charts (all metrics)")
     st.caption(
@@ -4256,13 +4258,11 @@ def render_results_tradeoff_scatters(
                 "CO₂ avoided (kg)",
                 "Annual electricity bill vs CO₂ avoided",
             ),
-            use_container_width=True,
             key=f"{_pk}_tf_bill_co2",
         )
     with r1c2:
         render_plotly_figure(
             _scatter("CAPEX (€)", _co2_av_c, "CAPEX (€)", "CO₂ avoided (kg)", "CAPEX vs CO₂ avoided"),
-            use_container_width=True,
             key=f"{_pk}_tf_capex_co2",
         )
     r2c1, r2c2 = st.columns(2)
@@ -4311,7 +4311,7 @@ def render_results_tradeoff_scatters(
 
         with r2c1:
             render_plotly_figure(
-                _scatter_pb(), use_container_width=True, key=f"{_pk}_tf_payback_co2"
+                _scatter_pb(), key=f"{_pk}_tf_payback_co2"
             )
     else:
         with r2c1:
@@ -4320,7 +4320,6 @@ def render_results_tradeoff_scatters(
     with r2c2:
         render_plotly_figure(
             _scatter("Self-sufficiency (%)", "Self-consumption ratio (%)", "Self-sufficiency (%)", "Self-consumption (%)", "Self-sufficiency vs self-consumption"),
-            use_container_width=True,
             key=f"{_pk}_tf_ss_scr",
         )
 
@@ -4406,9 +4405,9 @@ def render_filtered_scenario_comparison_styled_table(
             return [""] * len(s)
 
         _sty = _sty.apply(_highlight_selected_row, axis=1)
-        st.dataframe(_sty, use_container_width=True, hide_index=True, height=min(420, 56 + 28 * len(_cmp)))
+        st.dataframe(_sty, width="stretch", hide_index=True, height=min(420, 56 + 28 * len(_cmp)))
     except Exception:
-        st.dataframe(_cmp, use_container_width=True, hide_index=True, height=min(420, 56 + 28 * len(_cmp)))
+        st.dataframe(_cmp, width="stretch", hide_index=True, height=min(420, 56 + 28 * len(_cmp)))
 
 
 def _goal_higher_better_for_tariff_bar_rank(goal: str) -> bool:
@@ -5219,7 +5218,6 @@ def _render_cumulative_outlook_expander_for_row(
             _apply_yaxis_range_from_values(fig_sav, cumulative_savings)
             render_plotly_figure(
                 fig_sav,
-                use_container_width=True,
                 key=f"{plotly_chart_key_prefix}_cum_savings",
             )
         with c_co2:
@@ -5240,7 +5238,6 @@ def _render_cumulative_outlook_expander_for_row(
             _apply_yaxis_range_from_values(fig_co2, cumulative_co2)
             render_plotly_figure(
                 fig_co2,
-                use_container_width=True,
                 key=f"{plotly_chart_key_prefix}_cum_co2",
             )
         with c_cash:
@@ -5266,7 +5263,6 @@ def _render_cumulative_outlook_expander_for_row(
             _apply_yaxis_range_from_values(fig_cf, cumulative_disc_net_cashflow)
             render_plotly_figure(
                 fig_cf,
-                use_container_width=True,
                 key=f"{plotly_chart_key_prefix}_cum_dcf",
             )
     else:
@@ -5329,7 +5325,6 @@ def _render_cumulative_outlook_expander_for_row(
                 _apply_yaxis_range_from_values(fig_sav, cumulative_savings)
                 render_plotly_figure(
                     fig_sav,
-                    use_container_width=True,
                     key=f"{plotly_chart_key_prefix}_cum_savings",
                 )
             with c_co2:
@@ -5350,7 +5345,6 @@ def _render_cumulative_outlook_expander_for_row(
                 _apply_yaxis_range_from_values(fig_co2, cumulative_co2)
                 render_plotly_figure(
                     fig_co2,
-                    use_container_width=True,
                     key=f"{plotly_chart_key_prefix}_cum_co2",
                 )
             with c_cash:
@@ -5376,7 +5370,6 @@ def _render_cumulative_outlook_expander_for_row(
                 _apply_yaxis_range_from_values(fig_cf, cumulative_disc_net_cashflow)
                 render_plotly_figure(
                     fig_cf,
-                    use_container_width=True,
                     key=f"{plotly_chart_key_prefix}_cum_dcf",
                 )
 
@@ -5495,7 +5488,6 @@ def render_all_tariffs_comparison_grouped_bars(
                     _apply_yaxis_range_from_values(fig_cmp, _cmp_y_flat)
             render_plotly_figure(
                 fig_cmp,
-                use_container_width=True,
                 key=f"{radio_session_key}_all_tariffs_grouped_bars",
             )
 
@@ -5912,17 +5904,17 @@ def _render_selected_scenario_detail_charts(
     st.markdown("##### Selected scenario charts (demand, savings, tariff costs)")
     r1c1, r1c2 = st.columns(2)
     with r1c1:
-        render_plotly_figure(fig_avg, use_container_width=True, key=f"{_p}_avg_hour")
+        render_plotly_figure(fig_avg, key=f"{_p}_avg_hour")
     with r1c2:
-        render_plotly_figure(fig_month, use_container_width=True, key=f"{_p}_savings_month")
+        render_plotly_figure(fig_month, key=f"{_p}_savings_month")
 
     r2c1, r2c2 = st.columns(2)
     with r2c1:
-        render_plotly_figure(fig_band, use_container_width=True, key=f"{_p}_donut_band")
+        render_plotly_figure(fig_band, key=f"{_p}_donut_band")
     with r2c2:
-        render_plotly_figure(fig_week, use_container_width=True, key=f"{_p}_donut_week")
+        render_plotly_figure(fig_week, key=f"{_p}_donut_week")
 
-    render_plotly_figure(fig_tariff, use_container_width=True, key=f"{_p}_bill_tariff")
+    render_plotly_figure(fig_tariff, key=f"{_p}_bill_tariff")
 
 
 def _optimizer_progress_overlay_html(tariff_name: str, completed: int, total: int, pct: int) -> str:
@@ -6498,7 +6490,6 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
         _apply_yaxis_range_from_values(fig_tb, monthly_bar_totals)
         render_plotly_figure(
             fig_tb,
-            use_container_width=True,
             key="consumption_patterns_monthly_timeband",
             apply_bar_value_labels=False,
         )
@@ -6514,7 +6505,7 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_s, seasonal.values)
-        render_plotly_figure(fig_s, use_container_width=True, key="consumption_patterns_seasonal", apply_bar_value_labels=False)
+        render_plotly_figure(fig_s, key="consumption_patterns_seasonal", apply_bar_value_labels=False)
 
     r4c1, r4c2 = st.columns(2)
     daily = daily_totals.sort_index()
@@ -6530,7 +6521,7 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_d, daily.values)
-        render_plotly_figure(fig_d, use_container_width=True)
+        render_plotly_figure(fig_d)
     with r4c2:
         hr_all = h.groupby("hour")["consumption"].mean().reindex(range(24)).fillna(0.0)
         fig_av = go.Figure()
@@ -6573,7 +6564,7 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_av, hr_all.to_numpy(dtype=float))
-        render_plotly_figure(fig_av, use_container_width=True)
+        render_plotly_figure(fig_av)
 
     def _time_band_share_fig(title: str, sub: pd.DataFrame) -> go.Figure:
         if len(sub) == 0:
@@ -6623,7 +6614,6 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
         with col:
             render_plotly_figure(
                 _time_band_share_fig(ttl, sub),
-                use_container_width=True,
             )
 
     st.markdown("")
@@ -6726,9 +6716,9 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
 
     line_wd_col, line_season_col = st.columns(2)
     with line_wd_col:
-        render_plotly_figure(fig_wd, use_container_width=True)
+        render_plotly_figure(fig_wd)
     with line_season_col:
-        render_plotly_figure(fig_season_h, use_container_width=True)
+        render_plotly_figure(fig_season_h)
 
     hm_left, hm_right = st.columns(2)
     pivot_hm = h.pivot_table(values="consumption", index="hour", columns="month", aggfunc="mean")
@@ -6753,7 +6743,7 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
             xaxis_title="Month",
             yaxis_title="Hour",
         )
-        render_plotly_figure(fig_hm, use_container_width=True)
+        render_plotly_figure(fig_hm)
     with hm_right:
         fig_heat_dow = go.Figure(
             data=go.Heatmap(
@@ -6771,7 +6761,7 @@ def render_community_consumption_patterns(prepared_df: pd.DataFrame) -> None:
             xaxis_title="",
             yaxis_title="Hour",
         )
-        render_plotly_figure(fig_heat_dow, use_container_width=True)
+        render_plotly_figure(fig_heat_dow)
 
 
 def _pv_per_kwp_pattern_features(prepared_df: pd.DataFrame) -> pd.DataFrame:
@@ -6846,7 +6836,7 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_m, monthly.values)
-        render_plotly_figure(fig_m, use_container_width=True)
+        render_plotly_figure(fig_m)
     with r1c2:
         fig_s = go.Figure(data=[go.Bar(x=seasonal.index.tolist(), y=seasonal.values, marker_color="#ea580c")])
         fig_s.update_layout(
@@ -6859,7 +6849,7 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_s, seasonal.values)
-        render_plotly_figure(fig_s, use_container_width=True)
+        render_plotly_figure(fig_s)
 
     r4c1, r4c2 = st.columns(2)
     daily = daily_totals.sort_index()
@@ -6875,7 +6865,7 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_d, daily.values)
-        render_plotly_figure(fig_d, use_container_width=True)
+        render_plotly_figure(fig_d)
     with r4c2:
         hr_all = h.groupby("hour")[ycol].mean().reindex(range(24)).fillna(0.0)
         fig_av = go.Figure()
@@ -6918,7 +6908,7 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
             yaxis=dict(rangemode="tozero"),
         )
         _apply_yaxis_range_from_values(fig_av, hr_all.to_numpy(dtype=float))
-        render_plotly_figure(fig_av, use_container_width=True)
+        render_plotly_figure(fig_av)
 
     def _time_band_share_fig_pv(title: str, sub: pd.DataFrame) -> go.Figure:
         if len(sub) == 0:
@@ -6967,7 +6957,6 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
         with col:
             render_plotly_figure(
                 _time_band_share_fig_pv(ttl, sub),
-                use_container_width=True,
             )
 
     st.markdown("")
@@ -7070,9 +7059,9 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
 
     line_wd_col, line_season_col = st.columns(2)
     with line_wd_col:
-        render_plotly_figure(fig_wd, use_container_width=True)
+        render_plotly_figure(fig_wd)
     with line_season_col:
-        render_plotly_figure(fig_season_h, use_container_width=True)
+        render_plotly_figure(fig_season_h)
 
     hm_left, hm_right = st.columns(2)
     pivot_hm = h.pivot_table(values=ycol, index="hour", columns="month", aggfunc="mean")
@@ -7097,7 +7086,7 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
             xaxis_title="Month",
             yaxis_title="Hour",
         )
-        render_plotly_figure(fig_hm, use_container_width=True)
+        render_plotly_figure(fig_hm)
     with hm_right:
         fig_heat_dow = go.Figure(
             data=go.Heatmap(
@@ -7115,7 +7104,7 @@ def render_production_patterns_per_kwp(prepared_df: pd.DataFrame) -> None:
             xaxis_title="",
             yaxis_title="Hour",
         )
-        render_plotly_figure(fig_heat_dow, use_container_width=True)
+        render_plotly_figure(fig_heat_dow)
 
 
 RANK_GOAL_OPTIONS = [p[1] for p in RECOMMENDED_WINNER_PRESETS]
