@@ -196,6 +196,72 @@ def _subset_dataframe_display_columns(df: pd.DataFrame, allowlist: list[str]) ->
     return df.loc[:, cols].copy()
 
 
+def _apply_full_results_explorer_table_filters(
+    df: pd.DataFrame,
+    *,
+    tariff_pick: list[str],
+    tariff_universe: list[str],
+    scenario_pick: list[str],
+    scenario_universe: list[str],
+    search_text: str,
+    pv_min: float,
+    pv_max: float,
+    batt_min: float,
+    batt_max: float,
+    npv_min: float,
+    npv_max: float,
+    payback_min: float,
+    payback_max: float,
+) -> pd.DataFrame:
+    """Sidebar-hard-filtered consolidated table → further client filters for **Full results** (no AgGrid required)."""
+    if df is None or len(df) == 0:
+        return df
+    out = df
+    tp = tariff_pick if tariff_pick else tariff_universe
+    sp = scenario_pick if scenario_pick else scenario_universe
+    if "Tariff" in out.columns and tp:
+        out = out[out["Tariff"].astype(str).isin(tp)]
+    if "Scenario" in out.columns and sp:
+        out = out[out["Scenario"].astype(str).isin(sp)]
+    if "PV (kWp)" in out.columns and np.isfinite(pv_min) and np.isfinite(pv_max) and pv_max >= pv_min:
+        _pv = pd.to_numeric(out["PV (kWp)"], errors="coerce")
+        out = out[(_pv >= float(pv_min)) & (_pv <= float(pv_max))]
+    if "Battery (kWh)" in out.columns and np.isfinite(batt_min) and np.isfinite(batt_max) and batt_max >= batt_min:
+        _bh = pd.to_numeric(out["Battery (kWh)"], errors="coerce")
+        out = out[(_bh >= float(batt_min)) & (_bh <= float(batt_max))]
+    if "NPV (€)" in out.columns and np.isfinite(npv_min) and np.isfinite(npv_max) and npv_max >= npv_min:
+        _np = pd.to_numeric(out["NPV (€)"], errors="coerce")
+        out = out[(_np >= float(npv_min)) & (_np <= float(npv_max))]
+    if "Payback (yrs)" in out.columns and np.isfinite(payback_min) and np.isfinite(payback_max) and payback_max >= payback_min:
+        _pb = pd.to_numeric(out["Payback (yrs)"], errors="coerce")
+        out = out[(_pb >= float(payback_min)) & (_pb <= float(payback_max))]
+    q = (search_text or "").strip()
+    if q and len(out) > 0:
+        ql = q.lower()
+
+        def _row_hits(r: pd.Series) -> bool:
+            for v in r.values:
+                try:
+                    if ql in str(v).lower():
+                        return True
+                except Exception:
+                    continue
+            return False
+
+        out = out[out.apply(_row_hits, axis=1)]
+    return out
+
+
+def _numeric_column_bounds(df: pd.DataFrame, col: str) -> tuple[float, float]:
+    """Finite min/max for slider defaults on a numeric column."""
+    if df is None or len(df) == 0 or col not in df.columns:
+        return (0.0, 0.0)
+    s = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+    if len(s) == 0:
+        return (0.0, 0.0)
+    return (float(s.min()), float(s.max()))
+
+
 def _assumption_value_column_to_string(df: pd.DataFrame) -> pd.DataFrame:
     """Arrow-serialize Setting/Value tables: mixed numeric + text in ``Value`` must not infer float dtype."""
     if df is None or len(df) == 0 or "Value" not in df.columns:
@@ -3304,6 +3370,9 @@ def render_aggrid_results_table(
     ``aggrid_integer_round_cols`` lists extra numeric columns to round to whole numbers (nullable integer) for display.
 
     Set ``enable_column_filters=False`` to hide column filters and the floating filter row (e.g. **Recommended setups**).
+
+    By default this uses Streamlit's ``st.dataframe`` with **single-row selection** (click a row). Set environment
+    variable ``REC_USE_AGGRID=1`` to use **st_aggrid** instead (Excel-style column filters; may not render on some hosts).
     """
     if df is None or len(df) == 0:
         st.info("No rows to display.")
@@ -3379,6 +3448,10 @@ def render_aggrid_results_table(
     if use_selection:
         update_on_events.append("selectionChanged")
 
+    # Default: Streamlit's built-in dataframe + row selection (reliable on Streamlit Cloud). AgGrid is optional.
+    # Set environment variable REC_USE_AGGRID=1 to use st_aggrid (Excel-style column filters; may not render on some hosts).
+    _use_aggrid = _env_truthy("REC_USE_AGGRID")
+
     # Optional emergency fallback only (never tied to DEMO_MODE — that hid AgGrid and replaced row-click UX).
     _show_compat_table = _env_truthy("REC_SHOW_COMPAT_TABLE")
     if _show_compat_table:
@@ -3397,6 +3470,56 @@ def render_aggrid_results_table(
                 st.session_state[selection_session_key] = str(_cur) if _cur is not None and str(_cur) in _keys else _keys[0]
             else:
                 st.session_state[selection_session_key] = None
+        return display_df.copy()
+
+    if not _use_aggrid:
+        _show_for_native = (
+            display_df.drop(columns=[selection_row_key_field], errors="ignore")
+            if selection_row_key_field in display_df.columns
+            else display_df
+        )
+        _df_widget_key = f"nt_{hashlib.md5(str(effective_key).encode('utf-8')).hexdigest()[:26]}"
+        if use_selection:
+            event = st.dataframe(
+                _show_for_native,
+                width="stretch",
+                hide_index=True,
+                height=max(260, int(height)),
+                on_select="rerun",
+                selection_mode="single-row",
+                key=_df_widget_key,
+            )
+        else:
+            st.dataframe(
+                _show_for_native,
+                width="stretch",
+                hide_index=True,
+                height=max(260, int(height)),
+                key=_df_widget_key,
+            )
+            event = None
+        if caption:
+            st.caption(caption)
+        if use_selection and selection_session_key and selection_row_key_field in display_df.columns:
+            _sel_rows: list[int] = []
+            try:
+                if event is not None and getattr(event, "selection", None) is not None:
+                    _sel_rows = [int(x) for x in event.selection.rows]
+            except Exception:
+                _sel_rows = []
+            _keys = display_df[selection_row_key_field].astype(str).tolist()
+            if _sel_rows:
+                _ix = _sel_rows[0]
+                if 0 <= _ix < len(display_df):
+                    st.session_state[selection_session_key] = str(
+                        display_df.iloc[_ix][selection_row_key_field]
+                    )
+            elif len(display_df) > 0:
+                _cur = st.session_state.get(selection_session_key)
+                if _cur is None or str(_cur) not in _keys:
+                    st.session_state[selection_session_key] = str(
+                        display_df.iloc[0][selection_row_key_field]
+                    )
         return display_df.copy()
 
     response = AgGrid(
@@ -9687,8 +9810,8 @@ with tab_explorer:
     else:
         st.subheader("Full results")
         st.caption(
-            "Same **filtered** scenario universe as **Recommended setups**. **Click a row** to sync KPIs and charts below; "
-            "filters/sorts that hide the selected row move the selection to the **first visible** row."
+            "Same **sidebar** scenario universe as **Recommended setups**. Use the **filters below the column mode** to narrow rows, "
+            "then **click a row** to sync KPIs and charts. If your pick disappears, the first visible row is selected."
         )
         filtered_view_ex = pd.DataFrame()
         full_table_df_ex = full_table_rank
@@ -9710,26 +9833,154 @@ with tab_explorer:
                 if _col_mode_ex == "Core columns"
                 else None
             )
-            filtered_view_ex = render_aggrid_results_table(
+            _tar_opts = (
+                sorted(base_table_df_ex["Tariff"].astype(str).unique().tolist())
+                if "Tariff" in base_table_df_ex.columns
+                else []
+            )
+            _scen_opts = (
+                sorted(base_table_df_ex["Scenario"].astype(str).unique().tolist())
+                if "Scenario" in base_table_df_ex.columns
+                else []
+            )
+            with st.expander("Filter this table (tariff, scenario, search, ranges)", expanded=True):
+                _f1, _f2 = st.columns(2)
+                with _f1:
+                    _sel_tar_ex = (
+                        st.multiselect(
+                            "Tariff",
+                            options=_tar_opts,
+                            default=_tar_opts,
+                            key="explorer_ms_tariff",
+                            disabled=len(_tar_opts) == 0,
+                        )
+                        if _tar_opts
+                        else []
+                    )
+                with _f2:
+                    _sel_scen_ex = (
+                        st.multiselect(
+                            "Scenario",
+                            options=_scen_opts,
+                            default=_scen_opts,
+                            key="explorer_ms_scenario",
+                            disabled=len(_scen_opts) == 0,
+                        )
+                        if _scen_opts
+                        else []
+                    )
+                _search_ex = st.text_input(
+                    "Search in any column",
+                    "",
+                    key="explorer_txt_search",
+                    help="Keeps rows where any cell contains this text (case-insensitive).",
+                )
+            _pv_lo_b, _pv_hi_b = _numeric_column_bounds(base_table_df_ex, "PV (kWp)")
+            _bt_lo_b, _bt_hi_b = _numeric_column_bounds(base_table_df_ex, "Battery (kWh)")
+            _np_lo_b, _np_hi_b = _numeric_column_bounds(base_table_df_ex, "NPV (€)")
+            _pb_lo_b, _pb_hi_b = _numeric_column_bounds(base_table_df_ex, "Payback (yrs)")
+            with st.expander("Numeric range filters (optional)", expanded=False):
+                _r1, _r2 = st.columns(2)
+                with _r1:
+                    if "PV (kWp)" in base_table_df_ex.columns and _pv_hi_b > _pv_lo_b:
+                        _pv_rng_ex = st.slider(
+                            "PV (kWp)",
+                            min_value=float(_pv_lo_b),
+                            max_value=float(_pv_hi_b),
+                            value=(float(_pv_lo_b), float(_pv_hi_b)),
+                            key="explorer_sl_pv",
+                        )
+                    else:
+                        _pv_rng_ex = (_pv_lo_b, _pv_hi_b)
+                    if "Battery (kWh)" in base_table_df_ex.columns and _bt_hi_b > _bt_lo_b:
+                        _bt_rng_ex = st.slider(
+                            "Battery (kWh)",
+                            min_value=float(_bt_lo_b),
+                            max_value=float(_bt_hi_b),
+                            value=(float(_bt_lo_b), float(_bt_hi_b)),
+                            key="explorer_sl_batt",
+                        )
+                    else:
+                        _bt_rng_ex = (_bt_lo_b, _bt_hi_b)
+                with _r2:
+                    if "NPV (€)" in base_table_df_ex.columns and _np_hi_b > _np_lo_b:
+                        _np_rng_ex = st.slider(
+                            "NPV (€)",
+                            min_value=float(_np_lo_b),
+                            max_value=float(_np_hi_b),
+                            value=(float(_np_lo_b), float(_np_hi_b)),
+                            key="explorer_sl_npv",
+                        )
+                    else:
+                        _np_rng_ex = (_np_lo_b, _np_hi_b)
+                    if "Payback (yrs)" in base_table_df_ex.columns and _pb_hi_b > _pb_lo_b:
+                        _pb_rng_ex = st.slider(
+                            "Payback (yrs)",
+                            min_value=float(_pb_lo_b),
+                            max_value=float(_pb_hi_b),
+                            value=(float(_pb_lo_b), float(_pb_hi_b)),
+                            key="explorer_sl_payback",
+                        )
+                    else:
+                        _pb_rng_ex = (_pb_lo_b, _pb_hi_b)
+            explorer_table_df = _apply_full_results_explorer_table_filters(
                 base_table_df_ex,
+                tariff_pick=_sel_tar_ex,
+                tariff_universe=_tar_opts,
+                scenario_pick=_sel_scen_ex,
+                scenario_universe=_scen_opts,
+                search_text=_search_ex,
+                pv_min=float(_pv_rng_ex[0]),
+                pv_max=float(_pv_rng_ex[1]),
+                batt_min=float(_bt_rng_ex[0]),
+                batt_max=float(_bt_rng_ex[1]),
+                npv_min=float(_np_rng_ex[0]),
+                npv_max=float(_np_rng_ex[1]),
+                payback_min=float(_pb_rng_ex[0]),
+                payback_max=float(_pb_rng_ex[1]),
+            )
+            _filter_sig_ex = "|".join(
+                [
+                    ",".join(_sel_tar_ex),
+                    ",".join(_sel_scen_ex),
+                    _search_ex.strip(),
+                    f"{_pv_rng_ex[0]:.8g}:{_pv_rng_ex[1]:.8g}",
+                    f"{_bt_rng_ex[0]:.8g}:{_bt_rng_ex[1]:.8g}",
+                    f"{_np_rng_ex[0]:.8g}:{_np_rng_ex[1]:.8g}",
+                    f"{_pb_rng_ex[0]:.8g}:{_pb_rng_ex[1]:.8g}",
+                ]
+            )
+            _grid_extra_ex = (
+                f"cols{'core' if _col_mode_ex == 'Core columns' else 'all'}"
+                f"|f:{hashlib.md5(_filter_sig_ex.encode('utf-8')).hexdigest()[:14]}"
+            )
+            filtered_view_ex = render_aggrid_results_table(
+                explorer_table_df,
                 grid_key="scenario_explorer_aggrid",
                 height=420,
                 default_rank_goal=goal,
                 rank_goal_table="full",
                 lifetime_years=ly,
                 selection_session_key="selected_explorer_row_key",
-                grid_key_extra=f"cols{'core' if _col_mode_ex == 'Core columns' else 'all'}",
+                grid_key_extra=_grid_extra_ex,
                 display_column_allowlist=_allow_ex,
+                enable_column_filters=_env_truthy("REC_USE_AGGRID"),
             )
             n_f_ex = len(filtered_view_ex)
-            st.caption(
-                f"**{n_f_ex:,}** / **{n_all_ex:,}** rows visible after grid filters and column sort. "
-                "**CSV:** choose **results only** (plain table) or **+ assumptions** (Setting/Value block, blank line, then data; internal row keys omitted)."
-            )
+            if _env_truthy("REC_USE_AGGRID"):
+                st.caption(
+                    f"**{n_f_ex:,}** / **{n_all_ex:,}** rows in this table after **Full results** filters (AgGrid column filters also apply). "
+                    "**CSV:** choose **results only** (plain table) or **+ assumptions** (Setting/Value block, blank line, then data; internal row keys omitted)."
+                )
+            else:
+                st.caption(
+                    f"**{n_f_ex:,}** / **{n_all_ex:,}** rows after **Full results** filters · **click a row** to update KPIs and charts. "
+                    "**CSV:** **results only** or **+ assumptions** (Setting/Value block, blank line, then data; internal row keys omitted)."
+                )
             _ass_scenarios_ex = last_run_assumptions_snapshot_df()
             eg1, eg2 = st.columns(2)
             with eg1:
-                st.caption("**Filtered grid view** (visible rows)")
+                st.caption("**Filtered table view** (rows after Full results filters)")
                 g1a, g1b = st.columns(2)
                 with g1a:
                     st.download_button(
@@ -9804,7 +10055,7 @@ with tab_explorer:
                 tradeoff_expander_title="Advanced trade-off charts (explorer selection)",
                 comparison_selection_caption=(
                     "Lowest **annual electricity bill (€)** and highest **annual CO₂ reduction (kg)** are highlighted; "
-                    "**yellow row** = the scenario selected in the Ag Grid above."
+                    "**yellow row** = the scenario selected in the **Full results** table above."
                 ),
                 plotly_chart_key_prefix="explorer_detail",
                 prominent_header=True,
