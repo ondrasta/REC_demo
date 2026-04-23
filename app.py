@@ -1112,6 +1112,9 @@ HEADER_BANNER_IMAGE = _APP_ROOT / "assets" / "banners" / "banner_rec_residential
 EMBEDDED_SAVED_RUNS_DIR = _APP_ROOT / "assets" / "saved_runs"
 BUNDLED_RESEARCH_XLSX = _APP_ROOT / "assets" / "research" / "res.xlsx"
 RESEARCH_OVERALL_COMPARISON_IMAGE = _APP_ROOT / "assets" / "research" / "overall_comparison.png"
+RESEARCH_DECISION_IMAGE = _APP_ROOT / "assets" / "research" / "decision.png"
+RESEARCH_KEY_FINDINGS_IMAGE = _APP_ROOT / "assets" / "research" / "key_findings.png"
+RESEARCH_LIMITATIONS_IMAGE = _APP_ROOT / "assets" / "research" / "limitations.png"
 EMBEDDED_RUN_NIGHT_CHARGING_OFF_ZIP = EMBEDDED_SAVED_RUNS_DIR / "rec_saved_run_batt_night_off.zip"
 EMBEDDED_RUN_NIGHT_CHARGING_ON_ZIP = EMBEDDED_SAVED_RUNS_DIR / "rec_saved_run_batt_night_on.zip"
 # Keep bundled demo runs available in code, but disabled by default so users start
@@ -3959,6 +3962,16 @@ def render_bundled_research_tab() -> None:
         st.image(str(RESEARCH_OVERALL_COMPARISON_IMAGE), width="stretch")
     else:
         st.warning("Overall comparison image is missing (`assets/research/overall_comparison.png`).")
+
+    for _img_path in (
+        RESEARCH_DECISION_IMAGE,
+        RESEARCH_KEY_FINDINGS_IMAGE,
+        RESEARCH_LIMITATIONS_IMAGE,
+    ):
+        if _img_path.is_file():
+            st.image(str(_img_path), width="stretch")
+        else:
+            st.warning(f"Research image is missing (`{_img_path.relative_to(_APP_ROOT)}`).")
 
     disp = format_research_display_dataframe(
         build_research_display_dataframe(raw, scenario_titles, tariff_names)
@@ -8069,8 +8082,8 @@ def render_embedded_saved_runs_picker(*, section_label: str = "Demo runs") -> No
         return
 
     labels = list(available.keys())
-    # Default view: ON (as requested).
-    default_label = "Battery night charging: ON" if "Battery night charging: ON" in labels else labels[0]
+    # Default view: OFF.
+    default_label = "Battery night charging: OFF" if "Battery night charging: OFF" in labels else labels[0]
 
     if st.session_state.get("_embedded_saved_run_choice") not in labels:
         st.session_state["_embedded_saved_run_choice"] = default_label
