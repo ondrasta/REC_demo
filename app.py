@@ -753,7 +753,7 @@ _LEGACY_RANK_GOAL_TO_PRESET_LABEL: dict[str, str] = {
 RECOMMENDED_WINNER_PRESET_HELP = """
 Pick how the app chooses **one winner** per tariff × scenario among rows that already pass **Decision constraints** (same feasible set for every preset).
 
-**Balanced recommendation** — After NPV (highest first), tie-break **CO₂ savings (kg)**. **Best financial value** — After NPV, tie-break **annual savings (€)** first instead. Then payback, bill, and CAPEX as below.
+Ranking order per preset:
 
 **Balanced recommendation:** 1. NPV (€) ↑ 2. CO₂ savings (kg) ↑ 3. SCR (%) ↑ 4. Annual savings (€) ↑ 5. CAPEX (€) ↓
 
