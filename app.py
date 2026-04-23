@@ -2736,7 +2736,6 @@ def render_recommended_setups_tab_section(
         # Keep Recommended rows aligned with the same sidebar hard-filtered universe used by Full results.
         if (
             hard_filtered_rank_df is not None
-            and len(hard_filtered_rank_df) > 0
             and SCENARIO_ROW_KEY_FIELD in hard_filtered_rank_df.columns
             and SCENARIO_ROW_KEY_FIELD in _rec_df_grid.columns
         ):
@@ -2744,6 +2743,19 @@ def render_recommended_setups_tab_section(
             _rec_df_grid = _rec_df_grid[
                 _rec_df_grid[SCENARIO_ROW_KEY_FIELD].astype(str).isin(_allowed_keys)
             ].copy()
+        _rec_df_grid = _apply_hard_filters_to_recommended_df(
+            _rec_df_grid,
+            capex_max_eur=capex_max,
+            payback_max_years=payback_max,
+            npv_min_eur=npv_min,
+            irr_min_pct=irr_min,
+            self_sufficiency_min_pct=ss_min,
+            annual_electricity_cost_saving_min_pct=ann_cost_saving_min_pct,
+            annual_electricity_cost_max_eur=ann_cost_max,
+            self_consumption_ratio_min_pct=scr_min,
+            export_ratio_max_pct=export_max,
+            annual_co2_reduction_min_pct=co2_reduction_min_pct,
+        )
         _rec_df_grid = _sort_recommended_setups_df_by_sidebar_rank(_rec_df_grid, ranked)
         render_recommended_snapshot_cards_from_table(
             _rec_df_grid,
@@ -8773,6 +8785,57 @@ def _apply_hard_filters_to_results_df(
             # No PV → NaN export ratio: keep row (constraint does not apply).
             out = out[ex.isna() | (ex <= float(export_ratio_max_pct) + 1e-9)].copy()
 
+    return out
+
+
+def _apply_hard_filters_to_recommended_df(
+    df: pd.DataFrame,
+    *,
+    capex_max_eur: float | None = None,
+    payback_max_years: float | None = None,
+    npv_min_eur: float | None = None,
+    irr_min_pct: float | None = None,
+    self_sufficiency_min_pct: float | None = None,
+    annual_electricity_cost_saving_min_pct: float | None = None,
+    annual_electricity_cost_max_eur: float | None = None,
+    self_consumption_ratio_min_pct: float | None = None,
+    export_ratio_max_pct: float | None = None,
+    annual_co2_reduction_min_pct: float | None = None,
+) -> pd.DataFrame:
+    """Apply sidebar hard constraints to the Recommended table's displayed KPI columns."""
+    if df is None or len(df) == 0:
+        return pd.DataFrame()
+    out = df.copy()
+
+    def _num(col: str) -> pd.Series:
+        x = pd.to_numeric(out[col], errors="coerce")
+        return x.where(np.isfinite(x), np.nan)
+
+    if capex_max_eur is not None and "CAPEX (€)" in out.columns:
+        out = out[_num("CAPEX (€)") <= float(capex_max_eur)].copy()
+    if payback_max_years is not None and "Payback (yrs)" in out.columns:
+        out = out[_num("Payback (yrs)") <= float(payback_max_years)].copy()
+    if npv_min_eur is not None and "NPV (€)" in out.columns:
+        out = out[_num("NPV (€)") >= float(npv_min_eur)].copy()
+    if irr_min_pct is not None and "IRR (%)" in out.columns:
+        out = out[_num("IRR (%)") >= float(irr_min_pct)].copy()
+    if self_sufficiency_min_pct is not None:
+        _ss_col = "SSR" if "SSR" in out.columns else ("Self-sufficiency (%)" if "Self-sufficiency (%)" in out.columns else "")
+        if _ss_col:
+            out = out[_num(_ss_col) >= float(self_sufficiency_min_pct)].copy()
+    if annual_co2_reduction_min_pct is not None and "CO2 reduction (%)" in out.columns:
+        out = out[_num("CO2 reduction (%)") >= float(annual_co2_reduction_min_pct)].copy()
+    if annual_electricity_cost_saving_min_pct is not None and COL_ANNUAL_ELECTRICITY_BILL_REDUCTION_PCT in out.columns:
+        out = out[_num(COL_ANNUAL_ELECTRICITY_BILL_REDUCTION_PCT) >= float(annual_electricity_cost_saving_min_pct)].copy()
+    if annual_electricity_cost_max_eur is not None and COL_ANNUAL_ELECTRICITY_BILL_EUR in out.columns:
+        out = out[_num(COL_ANNUAL_ELECTRICITY_BILL_EUR) <= float(annual_electricity_cost_max_eur)].copy()
+    if self_consumption_ratio_min_pct is not None:
+        _scr_col = "SCR" if "SCR" in out.columns else ("Self-consumption ratio (%)" if "Self-consumption ratio (%)" in out.columns else "")
+        if _scr_col:
+            out = out[_num(_scr_col) >= float(self_consumption_ratio_min_pct)].copy()
+    if export_ratio_max_pct is not None and "Export ratio (% of PV gen)" in out.columns:
+        ex = _num("Export ratio (% of PV gen)")
+        out = out[ex.isna() | (ex <= float(export_ratio_max_pct) + 1e-9)].copy()
     return out
 
 
