@@ -33,7 +33,6 @@ from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder
 from bundled_research import (
     RESEARCH_WINNER_RULES,
     build_all_winners_summary_df,
-    build_overall_comparison_highest_npv_df,
     build_research_display_dataframe,
     format_research_display_dataframe,
     load_bundled_research_xlsx,
@@ -1112,6 +1111,7 @@ LOCAL_OVERRIDE_TARIFFS_CSV = _APP_ROOT / "data" / "local_tariffs.csv"
 HEADER_BANNER_IMAGE = _APP_ROOT / "assets" / "banners" / "banner_rec_residential_02.png"
 EMBEDDED_SAVED_RUNS_DIR = _APP_ROOT / "assets" / "saved_runs"
 BUNDLED_RESEARCH_XLSX = _APP_ROOT / "assets" / "research" / "res.xlsx"
+RESEARCH_OVERALL_COMPARISON_IMAGE = _APP_ROOT / "assets" / "research" / "overall_comparison.png"
 EMBEDDED_RUN_NIGHT_CHARGING_OFF_ZIP = EMBEDDED_SAVED_RUNS_DIR / "rec_saved_run_batt_night_off.zip"
 EMBEDDED_RUN_NIGHT_CHARGING_ON_ZIP = EMBEDDED_SAVED_RUNS_DIR / "rec_saved_run_batt_night_on.zip"
 # Keep bundled demo runs available in code, but disabled by default so users start
@@ -3954,9 +3954,11 @@ def render_bundled_research_tab() -> None:
         "(e.g. lowest bill, best NPV, shortest payback with non-finite payback excluded)."
     )
 
-    st.markdown("##### Overall comparison (highest NPV in each scenario)")
-    overall_cmp = build_overall_comparison_highest_npv_df(raw, scenario_titles, tariff_names, mat)
-    st.dataframe(overall_cmp, width="stretch", hide_index=True)
+    st.markdown("##### Overall comparison")
+    if RESEARCH_OVERALL_COMPARISON_IMAGE.is_file():
+        st.image(str(RESEARCH_OVERALL_COMPARISON_IMAGE), width="stretch")
+    else:
+        st.warning("Overall comparison image is missing (`assets/research/overall_comparison.png`).")
 
     disp = format_research_display_dataframe(
         build_research_display_dataframe(raw, scenario_titles, tariff_names)

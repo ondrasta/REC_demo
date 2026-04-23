@@ -184,63 +184,6 @@ def format_research_display_dataframe(display_df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def build_overall_comparison_highest_npv_df(
-    raw: pd.DataFrame,
-    scenario_titles: list[str],
-    tariff_names: list[str],
-    mat: np.ndarray,
-) -> pd.DataFrame:
-    """One KPI table where each scenario column uses the tariff with the highest NPV."""
-    row_labels = [raw.iloc[i, 0] for i in range(2, len(raw))]
-    row_labels_str = [str(x) if pd.notna(x) else "" for x in row_labels]
-    npv_ridx = _find_metric_row_index(row_labels_str, "npv (")
-    n_blocks = len(scenario_titles)
-
-    # Winner tariff index per scenario block based on highest NPV.
-    winner_idx_per_block: list[int] = []
-    for b in range(n_blocks):
-        vals = mat[npv_ridx, b * 5 : (b + 1) * 5].astype(float)
-        mask = np.isfinite(vals)
-        if not np.any(mask):
-            winner_idx_per_block.append(0)
-            continue
-        candidates = np.where(mask)[0]
-        sub = vals[mask]
-        winner_idx_per_block.append(int(candidates[int(np.argmax(sub))]))
-
-    out_rows: list[dict[str, object]] = []
-    tariff_row: dict[str, object] = {"KPI": "Tariff"}
-    for b, sname in enumerate(scenario_titles):
-        j = winner_idx_per_block[b]
-        tariff_row[str(sname)] = str(tariff_names[j]).replace("\n", " ").strip()
-    out_rows.append(tariff_row)
-
-    for i, metric_label in enumerate(row_labels):
-        kpi = str(metric_label) if pd.notna(metric_label) else ""
-        row: dict[str, object] = {"KPI": kpi}
-        fmt = _research_metric_display_format(kpi)
-        for b, sname in enumerate(scenario_titles):
-            j = winner_idx_per_block[b]
-            v = raw.iloc[2 + i, 1 + b * 5 + j]
-            if pd.isna(v):
-                row[str(sname)] = "—"
-                continue
-            try:
-                x = float(v)
-            except (TypeError, ValueError):
-                row[str(sname)] = v
-                continue
-            if not np.isfinite(x):
-                row[str(sname)] = "inf" if np.isinf(x) else "—"
-                continue
-            if fmt in ("int_size", "int_money"):
-                row[str(sname)] = str(int(round(x)))
-            else:
-                row[str(sname)] = f"{x:.1f}"
-        out_rows.append(row)
-    return pd.DataFrame(out_rows)
-
-
 def compute_winners_for_rule(
     raw: pd.DataFrame,
     scenario_titles: list[str],
