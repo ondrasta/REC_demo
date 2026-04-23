@@ -33,6 +33,7 @@ from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder
 from bundled_research import (
     RESEARCH_WINNER_RULES,
     build_all_winners_summary_df,
+    build_overall_comparison_highest_npv_df,
     build_research_display_dataframe,
     format_research_display_dataframe,
     load_bundled_research_xlsx,
@@ -3934,7 +3935,7 @@ def render_settings_kpi_guide_tab(setup: SetupFormValues) -> None:
 
 
 def render_bundled_research_tab() -> None:
-    """Bundled Excel research matrix: overview table, all-rules winners, grouped bar charts per metric."""
+    """Bundled Excel research matrix: overall-comparison table, grouped charts, then overview/winners tables."""
     st.subheader("Research results")
     st.caption(
         "**Bundled reference table** — fixed results shipped with the app, **not** from your current **Run analysis** session."
@@ -3953,15 +3954,13 @@ def render_bundled_research_tab() -> None:
         "(e.g. lowest bill, best NPV, shortest payback with non-finite payback excluded)."
     )
 
+    st.markdown("##### Overall comparison (highest NPV in each scenario)")
+    overall_cmp = build_overall_comparison_highest_npv_df(raw, scenario_titles, tariff_names, mat)
+    st.dataframe(overall_cmp, width="stretch", hide_index=True)
+
     disp = format_research_display_dataframe(
         build_research_display_dataframe(raw, scenario_titles, tariff_names)
     )
-    st.markdown("##### Overview table")
-    st.dataframe(disp, width="stretch")
-
-    winners_all = build_all_winners_summary_df(raw, scenario_titles, tariff_names, mat)
-    st.markdown("##### Winners by scenario (all rules)")
-    st.dataframe(winners_all, width="stretch", hide_index=True)
 
     st.markdown("##### Comparison bar charts (all metrics)")
     st.caption(
@@ -3972,6 +3971,13 @@ def render_bundled_research_tab() -> None:
         st.markdown(f"###### {rule.label}")
         fig_bars = research_metric_grouped_bars(raw, scenario_titles, tariff_names, mat, rule)
         render_plotly_figure(fig_bars, key=f"research_bars_{rule.id}")
+
+    st.markdown("##### Overview table")
+    st.dataframe(disp, width="stretch")
+
+    winners_all = build_all_winners_summary_df(raw, scenario_titles, tariff_names, mat)
+    st.markdown("##### Winners by scenario (all rules)")
+    st.dataframe(winners_all, width="stretch", hide_index=True)
 
 
 def _kpi_eur_whole_keys(lifetime_years: int) -> frozenset:
