@@ -726,6 +726,7 @@ def _export_results_df_for_csv(results_df: pd.DataFrame) -> pd.DataFrame:
 RECOMMENDED_WINNER_PRESET_DEFAULT = "balanced"
 RECOMMENDED_WINNER_PRESETS: tuple[tuple[str, str], ...] = (
     ("balanced", "Balanced recommendation"),
+    ("npv_only", "NPV only"),
     ("financial", "Best financial value"),
     ("lowest_bill", "Lowest annual bill"),
     ("fast_payback", "Fastest payback"),
@@ -744,7 +745,7 @@ _LEGACY_RANK_GOAL_TO_PRESET_LABEL: dict[str, str] = {
     "Best self-sufficiency / lowest grid import": "Highest CO₂ saving",
     "Highest annual CO2 savings": "Highest CO₂ saving",
     "Best cost–CO2 trade-off": "Balanced recommendation",
-    "Best NPV": "Balanced recommendation",
+    "Best NPV": "NPV only",
     "Best IRR": "Best financial value",
     "Largest PV meeting self-consumption ratio >= X%": "Balanced recommendation",
     "PV size closest to annual community demand": "Balanced recommendation",
@@ -756,6 +757,8 @@ Pick how the app chooses **one winner** per tariff × scenario among rows that a
 Ranking order per preset:
 
 **Balanced recommendation:** 1. NPV (€) ↑ 2. CO₂ savings (kg) ↑ 3. SCR (%) ↑ 4. Annual savings (€) ↑ 5. CAPEX (€) ↓
+
+**NPV only:** 1. NPV (€) ↑ 2. CAPEX (€) ↓
 
 **Best financial value:** 1. NPV (€) ↑ 2. Annual savings (€) ↑ 3. Payback (years) ↓ 4. Annual electricity bill (€) ↓ 5. CAPEX (€) ↓
 
@@ -774,6 +777,7 @@ def _recommended_winner_selection_export_text(preset_id: str) -> str:
     pid = preset_id if preset_id in RECOMMENDED_WINNER_PRESET_LABEL_BY_ID else RECOMMENDED_WINNER_PRESET_DEFAULT
     lines = {
         "balanced": "Among feasible: max NPV → max CO₂ (kg) → max SCR → max annual savings → min CAPEX",
+        "npv_only": "Among feasible: max NPV → min CAPEX",
         "financial": "Among feasible: max NPV → max annual savings → min payback → min bill → min CAPEX",
         "lowest_bill": "Among feasible: min bill → max annual savings → max NPV → max CO₂ (kg) → min CAPEX",
         "fast_payback": "Among feasible: min payback → max NPV → max annual savings → min bill → min CAPEX",
@@ -2112,6 +2116,9 @@ def _sort_feasible_for_recommended_winner_preset(feas: pd.DataFrame, preset_id: 
     if pid == "balanced":
         by = ["npv", "co2_save_kg", "self_consumption_ratio_pct", "savings", "_rec_capex"]
         asc = [False, False, False, False, True]
+    elif pid == "npv_only":
+        by = ["npv", "_rec_capex"]
+        asc = [False, True]
     elif pid == "financial":
         by = ["npv", "savings", "payback", "cost", "_rec_capex"]
         asc = [False, False, True, True, True]
@@ -3257,6 +3264,7 @@ def goal_to_tariff_compare_chart_column(
     _co2 = _df_co2_avoided_column(results_df) if results_df is not None else "CO2 savings (kg)"
     m = {
         "Balanced recommendation": "NPV (€)",
+        "NPV only": "NPV (€)",
         "Best financial value": "NPV (€)",
         "Lowest annual bill": _bill,
         "Fastest payback": "Payback (yrs)",
@@ -9125,6 +9133,9 @@ def _sort_consolidated_for_winner_preset(cand: pd.DataFrame, preset_id: str) -> 
     if pid == "balanced":
         by = ["_npv", "_co2", "_scr", "_sav", "_capex"]
         asc = [False, False, False, False, True]
+    elif pid == "npv_only":
+        by = ["_npv", "_capex"]
+        asc = [False, True]
     elif pid == "financial":
         by = ["_npv", "_sav", "_pb", "_b", "_capex"]
         asc = [False, False, True, True, True]
