@@ -2733,6 +2733,17 @@ def render_recommended_setups_tab_section(
         _rec_df_grid = _inject_recommended_metrics_from_consolidated(
             _rec_df_grid, full_table_rank, lifetime_years=ly
         )
+        # Keep Recommended rows aligned with the same sidebar hard-filtered universe used by Full results.
+        if (
+            hard_filtered_rank_df is not None
+            and len(hard_filtered_rank_df) > 0
+            and SCENARIO_ROW_KEY_FIELD in hard_filtered_rank_df.columns
+            and SCENARIO_ROW_KEY_FIELD in _rec_df_grid.columns
+        ):
+            _allowed_keys = set(hard_filtered_rank_df[SCENARIO_ROW_KEY_FIELD].astype(str).tolist())
+            _rec_df_grid = _rec_df_grid[
+                _rec_df_grid[SCENARIO_ROW_KEY_FIELD].astype(str).isin(_allowed_keys)
+            ].copy()
         _rec_df_grid = _sort_recommended_setups_df_by_sidebar_rank(_rec_df_grid, ranked)
         render_recommended_snapshot_cards_from_table(
             _rec_df_grid,
