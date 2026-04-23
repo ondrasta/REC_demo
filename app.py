@@ -3940,9 +3940,6 @@ def render_settings_kpi_guide_tab(setup: SetupFormValues) -> None:
 def render_bundled_research_tab() -> None:
     """Bundled Excel research matrix: overall-comparison table, grouped charts, then overview/winners tables."""
     st.subheader("Research results")
-    st.caption(
-        "**Bundled reference table** — fixed results shipped with the app, **not** from your current **Run analysis** session."
-    )
     if not BUNDLED_RESEARCH_XLSX.is_file():
         st.warning("Bundled research file is missing (`assets/research/res.xlsx`).")
         return
@@ -3951,11 +3948,6 @@ def render_bundled_research_tab() -> None:
     except Exception as e:
         st.error(f"Could not read bundled research workbook: {e}")
         return
-
-    st.caption(
-        "**Winner rules:** each metric uses **max** or **min** per scenario block as in the bundled research definitions "
-        "(e.g. lowest bill, best NPV, shortest payback with non-finite payback excluded)."
-    )
 
     st.markdown("##### Overall comparison")
     if RESEARCH_OVERALL_COMPARISON_IMAGE.is_file():
@@ -3987,6 +3979,13 @@ def render_bundled_research_tab() -> None:
         fig_bars = research_metric_grouped_bars(raw, scenario_titles, tariff_names, mat, rule)
         render_plotly_figure(fig_bars, key=f"research_bars_{rule.id}")
 
+    st.caption(
+        "**Bundled reference table** — fixed results shipped with the app, **not** from your current **Run analysis** session."
+    )
+    st.caption(
+        "**Winner rules:** each metric uses **max** or **min** per scenario block as in the bundled research definitions "
+        "(e.g. lowest bill, best NPV, shortest payback with non-finite payback excluded)."
+    )
     st.markdown("##### Overview table")
     st.dataframe(disp, width="stretch")
 
