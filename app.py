@@ -2763,11 +2763,15 @@ def render_recommended_setups_tab_section(
             payback_max=_payback_max_rec,
         )
         st.divider()
-        _feasible_row_keys = [
-            str(k)
-            for k in _rec_df_grid[SCENARIO_ROW_KEY_FIELD].tolist()
-            if not str(k).startswith(RECOMMENDED_NO_SIZING_KEY_PREFIX)
-        ]
+        _feasible_row_keys = (
+            [
+                str(k)
+                for k in _rec_df_grid[SCENARIO_ROW_KEY_FIELD].tolist()
+                if not str(k).startswith(RECOMMENDED_NO_SIZING_KEY_PREFIX)
+            ]
+            if SCENARIO_ROW_KEY_FIELD in _rec_df_grid.columns
+            else []
+        )
         if _feasible_row_keys:
             _cur_rec_sel = st.session_state.get(selection_session_key)
             if (
@@ -8803,8 +8807,10 @@ def _apply_hard_filters_to_recommended_df(
     annual_co2_reduction_min_pct: float | None = None,
 ) -> pd.DataFrame:
     """Apply sidebar hard constraints to the Recommended table's displayed KPI columns."""
-    if df is None or len(df) == 0:
+    if df is None:
         return pd.DataFrame()
+    if len(df) == 0:
+        return df.copy()
     out = df.copy()
 
     def _num(col: str) -> pd.Series:
