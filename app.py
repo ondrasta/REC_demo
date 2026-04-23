@@ -8726,6 +8726,12 @@ def _apply_hard_filters_to_results_df(
         # Constraints should not accept inf / -inf values.
         return x.where(np.isfinite(x), np.nan)
 
+    def _first_existing_col(candidates: list[str]) -> str:
+        for c in candidates:
+            if c in out.columns:
+                return c
+        return ""
+
     if capex_max_eur is not None:
         if "CAPEX (€)" in out.columns:
             capex = _col_numeric_finite("CAPEX (€)")
@@ -8750,8 +8756,9 @@ def _apply_hard_filters_to_results_df(
             out = out[irr >= float(irr_min_pct)].copy()
 
     if self_sufficiency_min_pct is not None:
-        if "Self-sufficiency (%)" in out.columns:
-            ss = _col_numeric_finite("Self-sufficiency (%)")
+        _ss_col = _first_existing_col(["Self-sufficiency (%)", "Self-sufficiency ratio (%)", "SSR"])
+        if _ss_col:
+            ss = _col_numeric_finite(_ss_col)
             out = out[ss >= float(self_sufficiency_min_pct)].copy()
 
     # Prefer CO2 reduction (%) if provided; it is more directly aligned with decision intent
@@ -8778,8 +8785,9 @@ def _apply_hard_filters_to_results_df(
             out = out[ac <= float(annual_electricity_cost_max_eur)].copy()
 
     if self_consumption_ratio_min_pct is not None:
-        if "Self-consumption ratio (%)" in out.columns:
-            scr = _col_numeric_finite("Self-consumption ratio (%)")
+        _scr_col = _first_existing_col(["Self-consumption ratio (%)", "SCR"])
+        if _scr_col:
+            scr = _col_numeric_finite(_scr_col)
             out = out[scr >= float(self_consumption_ratio_min_pct)].copy()
 
     if export_ratio_max_pct is not None:
